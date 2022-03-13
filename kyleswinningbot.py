@@ -1,20 +1,25 @@
+from turtle import pos
 from sc2.bot_ai import BotAI  # parent class we inherit from
 from sc2.data import Difficulty, Race  # difficulty for bots, race for the 1 of 3 races
 from sc2.main import run_game  # function that facilitates actually running the agents in games
 from sc2.player import Bot, Computer  #wrapper for whether or not the agent is one of your bots, or a "computer" player
 from sc2 import maps  # maps method for loading maps to play in.
 from sc2.ids.unit_typeid import UnitTypeId
+from sc2.unit import Unit
+from sc2.position import Point2
 import random
 
 class IncrediBot(BotAI): # inhereits from BotAI (part of BurnySC2)
     async def on_step(self, iteration: int): # on_step is a method that is called every step of the game.
-        print(f"{iteration}, n_workers: {self.workers.amount}, n_idle_workers: {self.workers.idle.amount},")
+        print(
+            f"{iteration}, n_workers: {self.workers.amount}, n_idle_workers: {self.workers.idle.amount},", \
             # f"minerals: {self.minerals}, gas: {self.vespene}, cannons: {self.structures(UnitTypeId.PHOTONCANNON).amount},", \
-            # f"pylons: {self.structures(UnitTypeId.PYLON).amount}, nexus: {self.structures(UnitTypeId.NEXUS).amount}", \
+            f"pylons: {self.structures(UnitTypeId.PYLON).amount}, nexus: {self.structures(UnitTypeId.NEXUS).amount}", \
             # f"gateways: {self.structures(UnitTypeId.GATEWAY).amount}, cybernetics cores: {self.structures(UnitTypeId.CYBERNETICSCORE).amount}", \
-            # f"stargates: {self.structures(UnitTypeId.STARGATE).amount}, voidrays: {self.units(UnitTypeId.VOIDRAY).amount}, supply: {self.supply_used}/{self.supply_cap}")
+            # f"stargates: {self.structures(UnitTypeId.STARGATE).amount}, voidrays: {self.units(UnitTypeId.VOIDRAY).amount}, supply: {self.supply_used}/{self.supply_cap}", \
+            "done")
         
-        def closest_nexus(assimilator):
+        def closest_nexus(assimilator: Unit):
             distance = 10000000000
             closest_nexus = None
             for nexus in self.townhalls:
@@ -35,11 +40,18 @@ class IncrediBot(BotAI): # inhereits from BotAI (part of BurnySC2)
         # if self.can_afford(UnitTypeId.NEXUS):  # can we afford one?
         #         await self.expand_now()  # build one!
 
-        if iteration < 500: # we are in the opener 
-            starting_base = self.townhalls[0] 
+        if iteration < 500 and iteration > 30: # we are in the opener 
+            starting_base: Unit = self.townhalls[0] 
             if  self.supply_left < 6: # if we are close to suply cap build a pylon
-                if self.can_afford(UnitTypeId.PYLON) and self.already_pending(UnitTypeId.PYLON) + self.structures.filter(lambda structure: structure.type_id == UnitTypeId.PYLON and structure.is_ready).amount == 0:
-                    await self.build(UnitTypeId.PYLON, near=self.townhalls.random)
+                if self.can_afford(UnitTypeId.PYLON) and self.already_pending(UnitTypeId.PYLON) + self.structures.filter(lambda structure: structure.type_id == UnitTypeId.PYLON and not structure.is_ready).amount == 0:
+                    pos: Point2 = (self.main_base_ramp.protoss_wall_pylon + starting_base.position) / 2
+                    await self.build(UnitTypeId.PYLON, near=pos)
+
+            # build a gateway in the wall 
+            elif self.structures.filter(lambda structure: structure.type_id == UnitTypeId.PYLON and structure.is_ready).amount == 1:
+                if self.already_pending(UnitTypeId.GATEWAY) + self.structures.filter(lambda structure: structure.type_id == UnitTypeId.GATEWAY).amount == 0:
+                    if self.can_afford(UnitTypeId.GATEWAY):
+                        await self.build(UnitTypeId.GATEWAY, near=self.main_base_ramp.protoss_wall_buildings[0])
 
             elif starting_base.surplus_harvesters < 0: # check if more probes are needed
                 if starting_base.is_idle and self.can_afford(UnitTypeId.PROBE):
@@ -53,6 +65,10 @@ class IncrediBot(BotAI): # inhereits from BotAI (part of BurnySC2)
                     if vespene.surplus_harvesters < 0:
                         if starting_base.is_idle and self.can_afford(UnitTypeId.PROBE):
                             starting_base.train(UnitTypeId.PROBE)
+
+        elif iteration < 30: # build wall pylon
+            if self.can_afford(UnitTypeId.PYLON) and self.already_pending(UnitTypeId.PYLON) + self.structures.filter(lambda structure: structure.type_id == UnitTypeId.PYLON and structure.is_ready).amount == 0:
+                await self.build(UnitTypeId.PYLON, near=self.main_base_ramp.protoss_wall_pylon)
 
         if iteration == 500: # we are in the opener 
             x = 1
