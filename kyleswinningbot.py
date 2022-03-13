@@ -5,6 +5,7 @@ from sc2.main import run_game  # function that facilitates actually running the 
 from sc2.player import Bot, Computer  #wrapper for whether or not the agent is one of your bots, or a "computer" player
 from sc2 import maps  # maps method for loading maps to play in.
 from sc2.ids.unit_typeid import UnitTypeId
+from sc2.ids.upgrade_id import UpgradeId
 from sc2.unit import Unit
 from sc2.position import Point2
 import random
@@ -41,7 +42,7 @@ class IncrediBot(BotAI): # inhereits from BotAI (part of BurnySC2)
         await self.distribute_workers() # put idle workers back to work
 
         for assimilator in self.gas_buildings: # check if all assimilatoprs have three workers and train more
-            if assimilator.surplus_harvesters < 0:
+            if assimilator.surplus_harvesters < 0 and self.supply_workers < 100:
                 closest_nexus = assimilator.position.sort_by_distance(self.townhalls)[0]
                 if closest_nexus.is_idle and self.can_afford(UnitTypeId.PROBE):
                     closest_nexus.train(UnitTypeId.PROBE)
@@ -95,12 +96,12 @@ class IncrediBot(BotAI): # inhereits from BotAI (part of BurnySC2)
         else:
             random_nexus = random.choice(self.townhalls)
             # check if more probes are needed
-            if random_nexus.surplus_harvesters < 0: 
+            if random_nexus.surplus_harvesters < 0 and self.supply_workers < 100: 
                 if random_nexus.is_idle and self.can_afford(UnitTypeId.PROBE):
                     random_nexus.train(UnitTypeId.PROBE)
 
             # build more pylons when needed 
-            if  self.supply_left < 6: # if we are close to suply cap build a pylon
+            if  self.supply_left < 6 and self.supply_cap != 200: # if we are close to suply cap build a pylon
                 if self.can_afford(UnitTypeId.PYLON) and self.already_pending(UnitTypeId.PYLON) + self.structures.filter(lambda structure: structure.type_id == UnitTypeId.PYLON and not structure.is_ready).amount == 0:
                     pos: Point2 = (self.main_base_ramp.protoss_wall_pylon + starting_nexus.position) / 2
                     await self.build(UnitTypeId.PYLON, near=pos)
@@ -118,7 +119,7 @@ class IncrediBot(BotAI): # inhereits from BotAI (part of BurnySC2)
 
             # build a stargate
             if self.structures.filter(lambda structure: structure.type_id == UnitTypeId.CYBERNETICSCORE and structure.is_ready).amount == 1:
-                if self.already_pending(UnitTypeId.STARGATE) == 0 and self.structures.filter(lambda structure: structure.type_id == UnitTypeId.STARGATE).amount < 6:
+                if self.already_pending(UnitTypeId.STARGATE) == 0 and self.structures.filter(lambda structure: structure.type_id == UnitTypeId.STARGATE).amount < 8:
                     if self.can_afford(UnitTypeId.STARGATE):
                         pos: Point2 = (self.main_base_ramp.protoss_wall_pylon + starting_nexus.position) / 2
                         await self.build(UnitTypeId.STARGATE, near=pos)
@@ -127,11 +128,65 @@ class IncrediBot(BotAI): # inhereits from BotAI (part of BurnySC2)
             if self.minerals > 800 and iteration - last_expanstion > 100:
                 last_expanstion = iteration
                 await self.expand_now()
+
+            # get upgrades 
+            if self.units(UnitTypeId.VOIDRAY).amount > 3:
             
+                if self.can_afford(UpgradeId.PROTOSSAIRWEAPONSLEVEL1):
+                    self.research(UpgradeId.PROTOSSAIRWEAPONSLEVEL1)
+                elif self.can_afford(UpgradeId.PROTOSSAIRARMORSLEVEL1):
+                    self.research(UpgradeId.PROTOSSAIRARMORSLEVEL1)
+                # elif self.can_afford(UpgradeId.PROTOSSAIRWEAPONSLEVEL2):
+                #     self.research(UpgradeId.PROTOSSAIRWEAPONSLEVEL2)
+                # elif self.can_afford(UpgradeId.PROTOSSAIRARMORSLEVEL2):
+                #     self.research(UpgradeId.PROTOSSAIRARMORSLEVEL2)
+
+                # build a forge if there is not one
+                if self.already_pending(UnitTypeId.FORGE) + self.structures.filter(lambda structure: structure.type_id == UnitTypeId.FORGE).amount == 0:
+                    if self.can_afford(UnitTypeId.FORGE):
+                        pos: Point2 = (self.main_base_ramp.protoss_wall_pylon + starting_nexus.position) / 2
+                        await self.build(UnitTypeId.FORGE, near=pos)
+                else:
+                    if self.can_afford(UpgradeId.PROTOSSSHIELDSLEVEL1):
+                        self.research(UpgradeId.PROTOSSSHIELDSLEVEL1)
+
+                # build a fleet beacon if there is not one and get voidray speed
+                if self.already_pending(UnitTypeId.FLEETBEACON) + self.structures.filter(lambda structure: structure.type_id == UnitTypeId.FLEETBEACON).amount == 0:
+                    if self.can_afford(UnitTypeId.FLEETBEACON):
+                        pos: Point2 = (self.main_base_ramp.protoss_wall_pylon + starting_nexus.position) / 2
+                        await self.build(UnitTypeId.FLEETBEACON, near=pos)
+                else:
+                    if self.can_afford(UpgradeId.VOIDRAYSPEEDUPGRADE):
+                        self.research(UpgradeId.VOIDRAYSPEEDUPGRADE)
+
+            # get observer
+            if self.units(UnitTypeId.VOIDRAY).amount > 3:
+                if self.already_pending(UnitTypeId.ROBOTICSFACILITY) + self.structures.filter(lambda structure: structure.type_id == UnitTypeId.ROBOTICSFACILITY).amount == 0:
+                    if self.can_afford(UnitTypeId.ROBOTICSFACILITY):
+                        pos: Point2 = (self.main_base_ramp.protoss_wall_pylon + starting_nexus.position) / 2
+                        await self.build(UnitTypeId.ROBOTICSFACILITY, near=pos)
+                elif self.structures(UnitTypeId.ROBOTICSFACILITY).ready.idle.amount > 0:
+                    if self.units(UnitTypeId.OBSERVER).amount < 1 and self.can_afford(UnitTypeId.OBSERVER):
+                        self.structures(UnitTypeId.ROBOTICSFACILITY).ready.idle[0].train(UnitTypeId.OBSERVER)
+            if self.units(UnitTypeId.OBSERVER).idle.amount > 0:
+                for obv in self.units(UnitTypeId.OBSERVER).idle:
+                    obv.move(self.units(UnitTypeId.VOIDRAY).random)
+
+            if self.supply_used > 190:
+                if self.enemy_units:
+                    for vr in self.units(UnitTypeId.VOIDRAY):
+                        vr.attack(random.choice(self.enemy_units))
+                elif self.enemy_structures:
+                    for vr in self.units(UnitTypeId.VOIDRAY):
+                        vr.attack(random.choice(self.enemy_structures))
+            else:
+                 for vr in self.units(UnitTypeId.VOIDRAY):
+                    pos: Point2 = (self.main_base_ramp.protoss_wall_pylon + self.game_info.map_center) / 2
+                    vr.attack(pos)
 
 
-        if iteration == 500: # we are in the opener 
-            x = 1
+        # if iteration == 500: # we are in the opener 
+        #     x = 1
 
         '''
         if self.townhalls:  # do we have a nexus?
@@ -234,6 +289,7 @@ class IncrediBot(BotAI): # inhereits from BotAI (part of BurnySC2)
 run_game(  # run_game is a function that runs the game.
     maps.get("2000AtmospheresAIE"), # the map we are playing on
     [Bot(Race.Protoss, IncrediBot()), # runs our coded bot, protoss race, and we pass our bot object 
-     Computer(Race.Zerg, Difficulty.Hard)], # runs a pre-made computer agent, zerg race, with a hard difficulty.
+     Computer(Race.Random, Difficulty.Harder)], # runs a pre-made computer agent, zerg race, with a hard difficulty.
     realtime=False, # When set to True, the agent is limited in how long each step can take to process.
+    disable_fog=True,
 )
