@@ -111,16 +111,23 @@ class IncrediBot(BotAI): # inhereits from BotAI (part of BurnySC2)
                 if self.can_afford(UnitTypeId.ASSIMILATOR) and self.already_pending(UnitTypeId.ASSIMILATOR) + self.structures.filter(lambda structure: structure.type_id == UnitTypeId.ASSIMILATOR and not structure.is_ready).amount == 0:
                     await self.build(UnitTypeId.ASSIMILATOR, vespene)
 
+            # build a voidray 
+            if self.can_afford(UnitTypeId.VOIDRAY):
+                for sg in self.structures(UnitTypeId.STARGATE).ready.idle:
+                    sg.train(UnitTypeId.VOIDRAY)
+
+            # build a stargate
+            if self.structures.filter(lambda structure: structure.type_id == UnitTypeId.CYBERNETICSCORE and structure.is_ready).amount == 1:
+                if self.already_pending(UnitTypeId.STARGATE) == 0 and self.structures.filter(lambda structure: structure.type_id == UnitTypeId.STARGATE).amount < 6:
+                    if self.can_afford(UnitTypeId.STARGATE):
+                        pos: Point2 = (self.main_base_ramp.protoss_wall_pylon + starting_nexus.position) / 2
+                        await self.build(UnitTypeId.STARGATE, near=pos)
+
+            # expand 
             if self.minerals > 800 and iteration - last_expanstion > 100:
                 last_expanstion = iteration
                 await self.expand_now()
-               # build a stargate
-            # if self.structures.filter(lambda structure: structure.type_id == UnitTypeId.GATEWAY and structure.is_ready).amount == 1:
-            #     if iteration == 260:
-            #         warp_in_zelot()
-            #     if self.already_pending(UnitTypeId.CYBERNETICSCORE) + self.structures.filter(lambda structure: structure.type_id == UnitTypeId.CYBERNETICSCORE).amount == 0:
-            #         if self.can_afford(UnitTypeId.CYBERNETICSCORE):
-            #             await self.build(UnitTypeId.CYBERNETICSCORE, near=self.main_base_ramp.protoss_wall_buildings[1])
+            
 
 
         if iteration == 500: # we are in the opener 
